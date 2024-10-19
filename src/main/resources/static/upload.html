@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Upload</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+        }
+        input[type="file"] {
+            display: block;
+            margin-bottom: 10px;
+        }
+        .download-form {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>파일 업로드 및 다운로드</h1>
+
+    <!-- 파일 업로드 폼 -->
+    <form id="uploadForm" action="/upload" method="post" enctype="multipart/form-data">
+        <label for="file">파일 선택:</label>
+        <input type="file" id="file" name="file" required>
+        <button type="submit">파일 업로드</button>
+    </form>
+
+    <p id="uploadResult"></p>
+
+    <!-- 파일 다운로드 폼 -->
+    <div class="download-form">
+        <h2>파일 다운로드</h2>
+        <form id="downloadForm" action="/download" method="get">
+            <label for="filename">파일명 입력:</label>
+            <input type="text" id="filename" name="filename" placeholder="다운로드할 파일명" required>
+            <button type="submit">파일 다운로드</button>
+        </form>
+    </div>
+</div>
+
+<script>
+    document.getElementById("uploadForm").onsubmit = async function(event) {
+        event.preventDefault();
+
+        const formData = new FormData(this);
+        const response = await fetch(this.action, {
+            method: this.method,
+            body: formData
+        });
+
+        const resultText = await response.text();
+        document.getElementById("uploadResult").innerText = resultText;
+    };
+</script>
+
+</body>
+</html>
