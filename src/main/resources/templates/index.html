@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>MyDrive - 구글 드라이브 UI</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            background-color: #f8f9fa;
+        }
+        .navbar {
+            background-color: #4285f4;
+            color: white;
+            padding: 1rem;
+            font-size: 1.5rem;
+        }
+        .container {
+            padding: 2rem;
+        }
+        .toolbar {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+        .folder, .file {
+            display: inline-block;
+            width: 150px;
+            margin: 1rem;
+            padding: 1rem;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            background-color: white;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .folder:hover, .file:hover {
+            background-color: #f1f3f4;
+            cursor: pointer;
+        }
+        .icon {
+            font-size: 3rem;
+            margin-bottom: 0.5rem;
+        }
+        .upload-btn input {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+<div class="navbar">
+    MyDrive
+</div>
+<div class="container">
+    <div class="toolbar">
+        <form th:action="@{/upload}" method="post" enctype="multipart/form-data" class="upload-btn">
+            <label>
+                📤 파일 업로드
+                <input type="file" name="file" onchange="this.form.submit()">
+            </label>
+        </form>
+        <form th:action="@{/create-folder}" method="post">
+            <input type="text" name="folderName" placeholder="폴더 이름" required>
+            <button type="submit">📁 폴더 만들기</button>
+        </form>
+    </div>
+
+    <div class="file-list">
+        <div th:each="folder : ${folders}" class="folder">
+            <a th:href="@{|/drive?path=${folder.name}|}">
+                <div class="icon">📁</div>
+                <div th:text="${folder.name}"></div>
+            </a>
+        </div>
+
+        <div th:each="file : ${files}" class="file">
+            <a th:href="@{|/download?filename=${file.originalFileName}|}">
+                <div class="icon">📄</div>
+                <div th:text="${file.originalFileName}"></div>
+            </a>
+        </div>
+    </div>
+</div>
+</body>
+</html>
