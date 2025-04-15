@@ -7,6 +7,8 @@ import org.springframework.web.multipart.MultipartFile;
 import sbapiserver.ddns.net.upload_server.config.FileStorageProperties;
 
 import java.io.IOException;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -50,18 +52,19 @@ public class FileService {
         }
     }
 
-    public void saveFile(MultipartFile file){
+    public void saveFile(MultipartFile file, String subPath){
         System.out.println("실행됨");
         try{
             if(file.isEmpty()){
                 throw new IllegalArgumentException("업로드 된 파일이 비어있습니다.");
             }
 
-            Path destinationFile = rootLocation.resolve(file.getOriginalFilename()).normalize();
+            Path currentPath = rootLocation.resolve(URLDecoder.decode(subPath, StandardCharsets.UTF_8)).normalize();
 
-            if(!destinationFile.startsWith(rootLocation)){
+            if(!currentPath.startsWith(rootLocation)){
                 throw new SecurityException("허용되지 않은 경로 접근");
             }
+            Path destinationFile = currentPath.resolve(file.getOriginalFilename()).normalize();
             file.transferTo(destinationFile.toFile());
         }catch (IOException e){
             throw new RuntimeException("파일 저장 실패: " + e.getMessage(), e);
