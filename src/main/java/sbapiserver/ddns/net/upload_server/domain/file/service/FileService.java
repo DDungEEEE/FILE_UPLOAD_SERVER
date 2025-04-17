@@ -1,19 +1,17 @@
 package sbapiserver.ddns.net.upload_server.domain.file.service;
 
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
+import org.springframework.util.FileSystemUtils;
 import org.springframework.web.multipart.MultipartFile;
 import sbapiserver.ddns.net.upload_server.config.FileStorageProperties;
-
+import java.io.BufferedOutputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.net.URLDecoder;
-import java.nio.charset.StandardCharsets;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Stream;
+import java.nio.file.Paths;
+
 
 @Service
 public class FileService {
@@ -23,7 +21,7 @@ public class FileService {
     public FileService(FileStorageProperties storageProperties){
         this.storageProperties = storageProperties;
         this.rootLocation = storageProperties.getRootPath();
-        initRoot(); // 시작 시 디렉토리 있는지 검사 -> 없으면 생성
+        initRoot();
     }
 
     private void initRoot(){
@@ -34,88 +32,50 @@ public class FileService {
         }
     }
 
-    public void createFolder(String folderName){
-        try {
-            if (!StringUtils.hasText(folderName)) {
-                throw new IllegalStateException("폴더 이름이 비어있습니다.");
-            }
-
-            Path newFolderPath = rootLocation.resolve(folderName).normalize();
-
-            // 루트 밖으로 나가는 공격 방지
-            if (!newFolderPath.startsWith(rootLocation)) {
-                throw new SecurityException("허용되지 않은 경로입니다.");
-            }
-            Files.createDirectories(newFolderPath);
-        }catch (IOException ex){
-            throw new RuntimeException("폴더 생성 실패: " + ex.getMessage(), ex);
-        }
-    }
-
-    public void saveFile(MultipartFile file, String subPath){
-        System.out.println("실행됨");
-        try{
-            if(file.isEmpty()){
-                throw new IllegalArgumentException("업로드 된 파일이 비어있습니다.");
-            }
-
-            Path currentPath = rootLocation.resolve(URLDecoder.decode(subPath, StandardCharsets.UTF_8)).normalize();
-
-            if(!currentPath.startsWith(rootLocation)){
-                throw new SecurityException("허용되지 않은 경로 접근");
-            }
-            Path destinationFile = currentPath.resolve(file.getOriginalFilename()).normalize();
-            file.transferTo(destinationFile.toFile());
-        }catch (IOException e){
-            throw new RuntimeException("파일 저장 실패: " + e.getMessage(), e);
-        }
-    }
-    public List<Map<String, String>> getAllFolders() {
-        // 실제 구현 전까지는 더미 데이터로 처리
-        try (Stream<Path> stream = Files.list(rootLocation)) {
-            return stream
-                    .filter(Files::isDirectory)
-                    .map(path -> Map.of("name", path.getFileName().toString()))
-                    .toList();
-        } catch (IOException e) {
-            throw new RuntimeException("폴더 목록 조회 실패", e);
-        }
-    }
-
-    public List<Map<String, String>> getAllFiles() {
-        try (Stream<Path> stream = Files.list(rootLocation)) {
-            return stream
-                    .filter(Files::isRegularFile)
-                    .map(path -> Map.of("originalFileName", path.getFileName().toString()))
-                    .toList();
-        } catch (IOException e) {
-            throw new RuntimeException("파일 목록 조회 실패", e);
-        }
-    }
-
-    public List<Map<String, String>> getSubFolders(Path path) {
-        try (Stream<Path> stream = Files.list(path)) {
-            return stream
-                    .filter(Files::isDirectory)
-                    .map(p -> Map.of("name", p.getFileName().toString()))
-                    .toList();
-        } catch (IOException e) {
-            throw new RuntimeException("폴더 목록 조회 실패", e);
-        }
-    }
-
-    public List<Map<String, String>> getFiles(Path path) {
-        try (Stream<Path> stream = Files.list(path)) {
-            return stream
-                    .filter(Files::isRegularFile)
-                    .map(p -> Map.of("originalFileName", p.getFileName().toString()))
-                    .toList();
-        } catch (IOException e) {
-            throw new RuntimeException("파일 목록 조회 실패", e);
-        }
-    }
-
     public Path getRoot(){
         return rootLocation;
     }
+
+    public void createFolder(String relativePath, String folderName) {
+        Path fullPath = rootLocation.resolve(Paths.get(relativePath)).resolve(folderName).normalize();
+        if (!fullPath.startsWith(rootLocation)) {
+            throw new SecurityException("허용되지 않은 경로입니다.");
+        }
+        try {
+            Files.createDirectories(fullPath);
+        } catch (IOException ex) {
+            throw new RuntimeException("폴더 생성 실패", ex);
+        }
+    }
+
+    public void saveChunk(String fileId, int chunkIndex, MultipartFile chunk) throws IOException {
+        Path tempDir = Paths.get("upload-temp", fileId);
+        Files.createDirectories(tempDir);
+        System.out.println(chunkIndex);
+        Path chunkPath = tempDir.resolve("chunk_" + chunkIndex);
+        chunk.transferTo(chunkPath);
+    }
+
+    public boolean allChunksReceived(String fileId, int totalChunks) {
+        Path tempDir = Paths.get("upload-temp", fileId);
+        for (int i = 0; i < totalChunks; i++) {
+            if (!Files.exists(tempDir.resolve("chunk_" + i))) return false;
+        }
+        return true;
+    }
+
+    public void mergeChunks(String fileId, int totalChunks, String originalFilename, String path) throws IOException {
+        Path tempDir = Paths.get("upload-temp", fileId);
+        Path uploadDir = rootLocation.resolve(path).normalize();
+        Files.createDirectories(uploadDir);
+
+        Path outputFile = uploadDir.resolve(originalFilename);
+        try (OutputStream out = new BufferedOutputStream(Files.newOutputStream(outputFile))) {
+            for (int i = 0; i < totalChunks; i++) {
+                Files.copy(tempDir.resolve("chunk_" + i), out);
+            }
+        }
+        FileSystemUtils.deleteRecursively(tempDir);
+    }
+
 }

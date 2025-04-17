@@ -1,83 +1,53 @@
 package sbapiserver.ddns.net.upload_server.domain.file.controller;
-
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.stereotype.Controller;
-import org.springframework.util.FileSystemUtils;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import sbapiserver.ddns.net.upload_server.domain.file.service.FileService;
 
-import java.io.BufferedOutputStream;
 import java.io.IOException;
-import java.io.OutputStream;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 
-@Controller
+@RestController
+@RequestMapping("/api/files/upload")
 @RequiredArgsConstructor
+@Tag(name = "File Upload API", description = "파일 업로드 및 병합")
 public class FileUploadController {
 
     private final FileService fileService;
+    @Operation(summary = "파일 청크 업로드", description = "대용량 파일을 분할하여 청크 단위로 업로드합니다. 마지막 청크인 경우 자동 병합됩니다.")
+    @PostMapping(consumes = {"multipart/form-data"})
+    public ResponseEntity<Void> uploadChunk(
+            @Parameter(description = "파일 고유 식별자", required = true)
+            @RequestPart String fileId,
 
-    @PostMapping("/upload-chunk")
-    public ResponseEntity<String> uploadChunk(
-            @RequestParam("chunk") MultipartFile chunk,
-            @RequestParam("chunkIndex") int chunkIndex,
-            @RequestParam("totalChunks") int totalChunks,
-            @RequestParam("fileId") String fileId,
-            @RequestParam("originalFilename") String originalFilename,
-            @RequestParam(value = "path", required = false, defaultValue = "") String path
-    ) throws IOException {
+            @Parameter(description = "청크 인덱스 (0부터 시작)", required = true)
+            @RequestPart int chunkIndex,
 
-        Path tempDir = Paths.get("upload-temp", fileId);
-        Files.createDirectories(tempDir); // 누락된 부분
-        Path chunkPath = tempDir.resolve("chunk_" + chunkIndex);
-        chunk.transferTo(chunkPath);
+            @Parameter(description = "전체 청크 개수", required = true)
+            @RequestPart int totalChunks,
 
-        if (allChunksReceived(fileId, totalChunks)) {
-            mergeChunks(fileId, totalChunks, originalFilename, path);
+            @Parameter(description = "원본 파일명", required = true)
+            @RequestPart String originalFilename,
+
+            @Parameter(description = "저장할 폴더 경로, root = . or / or 공백 ,상대경로로 인식한다. ex) a/b/c 절대경로로 입력 시 오류 발생 ex) /a/b/c", required = true)
+            @RequestPart String path,
+
+            @Parameter(description = "업로드할 청크 데이터", required = true, content = @Content(mediaType = MediaType.MULTIPART_FORM_DATA_VALUE))
+            @RequestPart MultipartFile chunk
+    )throws IOException {
+        System.out.println("------------------------------------------");
+        fileService.saveChunk(fileId, chunkIndex, chunk);
+
+        if (chunkIndex == totalChunks - 1 && fileService.allChunksReceived(fileId, totalChunks)) {
+            System.out.println("실행중");
+            fileService.mergeChunks(fileId, totalChunks, originalFilename, path);
         }
 
-        return ResponseEntity.ok("청크 저장 성공");
-    }
-
-    private boolean allChunksReceived(String fileId, int totalChunks) {
-        Path tempDir = Paths.get("upload-temp", fileId);
-        for (int i = 0; i < totalChunks; i++) {
-            if (!Files.exists(tempDir.resolve("chunk_" + i))) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    private void mergeChunks(String fileId, int totalChunks, String originalFilename, String path) throws IOException {
-        Path tempDir = Paths.get("upload-temp", fileId);
-        Path uploadDir = Paths.get("uploads").resolve(path);
-        Files.createDirectories(uploadDir);
-
-        Path outputFile = uploadDir.resolve(originalFilename);
-
-        try (OutputStream outputStream = new BufferedOutputStream(Files.newOutputStream(outputFile))) {
-            for (int i = 0; i < totalChunks; i++) {
-                Path chunkFile = tempDir.resolve("chunk_" + i);
-                Files.copy(chunkFile, outputStream);
-            }
-        }
-
-        FileSystemUtils.deleteRecursively(tempDir);
-        System.out.println("병합 완료: " + outputFile.toAbsolutePath());
-    }
-
-    @PostMapping("/create-folder")
-    public String createFolder(@RequestParam("folderName") String folderName,
-                               @RequestParam(value = "path", required = false, defaultValue = "") String path) {
-        fileService.createFolder(Paths.get(path, folderName).toString());
-        return "redirect:/drive?path=" + URLEncoder.encode(path, StandardCharsets.UTF_8);
+        return ResponseEntity.ok().build();
     }
 }
