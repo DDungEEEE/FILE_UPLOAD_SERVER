@@ -8,6 +8,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import sbapiserver.ddns.net.upload_server.domain.file.dto.FileChunkResDto;
 import sbapiserver.ddns.net.upload_server.domain.file.service.FileService;
 
 import java.io.IOException;
@@ -21,7 +22,7 @@ public class FileUploadController {
     private final FileService fileService;
     @Operation(summary = "파일 청크 업로드", description = "대용량 파일을 분할하여 청크 단위로 업로드합니다. 마지막 청크인 경우 자동 병합됩니다.")
     @PostMapping(consumes = {"multipart/form-data"})
-    public ResponseEntity<Void> uploadChunk(
+    public ResponseEntity<FileChunkResDto> uploadChunk(
             @Parameter(description = "파일 고유 식별자", required = true)
             @RequestPart String fileId,
 
@@ -48,6 +49,10 @@ public class FileUploadController {
             fileService.mergeChunks(fileId, totalChunks, originalFilename, path);
         }
 
-        return ResponseEntity.ok().build();
+        return ResponseEntity.ok(
+                FileChunkResDto.builder()
+                        .chunkIndex(chunkIndex)
+                        .totalChunks(totalChunks)
+                        .build());
     }
 }
